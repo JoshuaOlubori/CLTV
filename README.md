@@ -915,24 +915,6 @@ Remember that the two `backtest.*_error_pct` figures are already percentages.
 - **Language.** The API has no language setting. Names come back in English
   and must be sent back in English. The wording used in the approved design:
 
-  | From the API | French |
-  |---|---|
-  | Champions | Champions |
-  | Loyal | Fidèles |
-  | Potential loyalist | Fidèles potentiels |
-  | Needs attention | À surveiller |
-  | At risk | À risque |
-  | Churned | Perdues |
-  | Disconnected | Déconnectées |
-  | New since baseline | Nouvelles depuis la référence |
-  | Agent or reseller | Agent ou revendeur |
-  | Platinum / Gold / Silver / Bronze / Unranked | Platine / Or / Argent / Bronze / Non classé |
-  | 0-14 days … 90+ days | 0-14 jours … 90+ jours |
-  | Under 3 months / 3-12 months / 1-3 years / 3-5 years / 5+ years | Moins de 3 mois / 3-12 mois / 1-3 ans / 3-5 ans / 5 ans et plus |
-
-  The design's wording spoke of SIMs ("6,131 SIMs scored"). The headline
-  figures are now customers, so labels need to say customers.
-
 - **Segment descriptions and recommended actions.** The "who they are" line,
   the headline action and the lever tags in the segment explorer are marketing
   copy and live in the frontend, keyed by segment name.
