@@ -1,0 +1,2191 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "Subscriber CLTV API",
+    "description": "\nFeeds the Subscriber CLTV dashboard: predicted 12-month value, activity and\nsegments for every customer, and how customers move between segments over time.\n\n**Two levels.** Scores are worked out for each SIM, then added up to the\ncustomer who holds them. The overview, the customer list and the transitions\ncount **customers**; open a customer to see each of their SIMs.\n\nA screen-by-screen guide with worked examples is in `docs/API_GUIDE.md`.\n\n**Conventions**\n\n* Money is in the run's currency (`/api/meta` → `run.currency`).\n* A *share* or a probability is a fraction between 0 and 1 (0.74 means 74 %).\n* Dates are text in the form `YYYY-MM-DD`.\n* Names of segments, tiers and bands are always returned in English. Treat them\n  as fixed keys and translate them for display.\n* Filters are repeatable query parameters: `?segment=At risk&segment=Churned&tier=Gold`\n  keeps SIMs that are (At risk **or** Churned) **and** Gold. Leave a filter out to not filter on it.\n* Errors come back as `{\"detail\": \"what went wrong\"}`.\n\n",
+    "version": "2.0.0"
+  },
+  "paths": {
+    "/api/health": {
+      "get": {
+        "tags": [
+          "System"
+        ],
+        "summary": "Is the API up and the data loaded?",
+        "description": "Checks that the database answers and reports which scores are loaded. Use it for monitoring.",
+        "operationId": "get_health_api_health_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Health"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "A parameter is missing, mistyped or not an allowed value.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/meta": {
+      "get": {
+        "tags": [
+          "System"
+        ],
+        "summary": "Run details and the lists that fill the filters",
+        "description": "Everything that does not change between requests: the analysis date and assumptions, the\nforecast back-test, the allowed values of each filter, and the transition dates.\nThe dashboard calls this once when it opens.",
+        "operationId": "get_meta_api_meta_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Meta"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "A parameter is missing, mistyped or not an allowed value.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/overview": {
+      "get": {
+        "tags": [
+          "Overview"
+        ],
+        "summary": "All figures on the Overview page",
+        "description": "Headline numbers, value concentration, and breakdowns by segment, department,\nrecency band and tenure band. **Everything here counts customers**, each with all\ntheir SIMs taken together. Agent and reseller accounts are left out.\n\nThe segment breakdown ignores the segment filter, and the department breakdown\nignores the department filter, so every option stays visible while some are selected.",
+        "operationId": "get_overview_api_overview_get",
+        "parameters": [
+          {
+            "name": "department",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              },
+              "description": "Keep rows in any of these departments. Repeat the parameter for several.",
+              "default": [],
+              "title": "Department"
+            },
+            "description": "Keep rows in any of these departments. Repeat the parameter for several."
+          },
+          {
+            "name": "segment",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              },
+              "description": "Keep rows in any of these segments.",
+              "default": [],
+              "title": "Segment"
+            },
+            "description": "Keep rows in any of these segments."
+          },
+          {
+            "name": "tier",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              },
+              "description": "Keep rows in any of these value tiers ('Class' on the dashboard).",
+              "default": [],
+              "title": "Tier"
+            },
+            "description": "Keep rows in any of these value tiers ('Class' on the dashboard)."
+          },
+          {
+            "name": "recency_band",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              },
+              "description": "Keep rows in any of these recency bands.",
+              "default": [],
+              "title": "Recency Band"
+            },
+            "description": "Keep rows in any of these recency bands."
+          },
+          {
+            "name": "tenure_band",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              },
+              "description": "Keep rows in any of these tenure bands.",
+              "default": [],
+              "title": "Tenure Band"
+            },
+            "description": "Keep rows in any of these tenure bands."
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Overview"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "A parameter is missing, mistyped or not an allowed value.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/transitions/dates": {
+      "get": {
+        "tags": [
+          "Transitions"
+        ],
+        "summary": "Snapshot dates available",
+        "description": "Dates at which every customer was re-segmented, oldest first: recent month ends,\nthen the analysis date. Any earlier date can be a baseline and any later one a comparison.",
+        "operationId": "get_transition_dates_api_transitions_dates_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "type": "string"
+                  },
+                  "type": "array",
+                  "title": "Response Get Transition Dates Api Transitions Dates Get"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "A parameter is missing, mistyped or not an allowed value.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/transitions": {
+      "get": {
+        "tags": [
+          "Transitions"
+        ],
+        "summary": "How customers moved between segments between two dates",
+        "description": "The transition matrix as counts and as shares of each row, with headline figures.\n\nCounts customers, including those since disconnected, so the filters do not apply here.",
+        "operationId": "get_transitions_api_transitions_get",
+        "parameters": [
+          {
+            "name": "baseline",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "pattern": "^\\d{4}-\\d{2}-\\d{2}$",
+              "description": "A date from /api/transitions/dates, as YYYY-MM-DD.",
+              "title": "Baseline"
+            },
+            "description": "A date from /api/transitions/dates, as YYYY-MM-DD."
+          },
+          {
+            "name": "comparison",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "pattern": "^\\d{4}-\\d{2}-\\d{2}$",
+              "description": "A date from /api/transitions/dates, as YYYY-MM-DD.",
+              "title": "Comparison"
+            },
+            "description": "A date from /api/transitions/dates, as YYYY-MM-DD."
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Transitions"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "A parameter is missing, mistyped or not an allowed value.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "The request cannot be carried out as asked.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Nothing exists with that identifier.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/customers": {
+      "get": {
+        "tags": [
+          "Customers"
+        ],
+        "summary": "One page of the customer list",
+        "description": "The main list: one row per customer, with their SIMs taken together.\nOpen a row with `/api/customers/{customer_id}` to see each SIM.\n\nThe search text matches the customer ID, or the MSISDN key of any of the customer's SIMs.\nFiltering, searching, sorting and paging all happen in the database.",
+        "operationId": "get_customers_api_customers_get",
+        "parameters": [
+          {
+            "name": "search",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "maxLength": 60,
+              "description": "Text matched against the customer ID and the MSISDN key.",
+              "default": "",
+              "title": "Search"
+            },
+            "description": "Text matched against the customer ID and the MSISDN key."
+          },
+          {
+            "name": "sort",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "$ref": "#/components/schemas/CustomerSort",
+              "description": "Column to sort by.",
+              "default": "cltv_12m"
+            },
+            "description": "Column to sort by."
+          },
+          {
+            "name": "descending",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "boolean",
+              "description": "Largest first when true.",
+              "default": true,
+              "title": "Descending"
+            },
+            "description": "Largest first when true."
+          },
+          {
+            "name": "page",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 0,
+              "description": "Page to return; the first page is 0.",
+              "default": 0,
+              "title": "Page"
+            },
+            "description": "Page to return; the first page is 0."
+          },
+          {
+            "name": "page_size",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "maximum": 200,
+              "minimum": 1,
+              "description": "Rows per page.",
+              "default": 20,
+              "title": "Page Size"
+            },
+            "description": "Rows per page."
+          },
+          {
+            "name": "over_sim_limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "boolean",
+              "description": "false (default): people. true: agent and reseller accounts only, which are left out everywhere else.",
+              "default": false,
+              "title": "Over Sim Limit"
+            },
+            "description": "false (default): people. true: agent and reseller accounts only, which are left out everywhere else."
+          },
+          {
+            "name": "department",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              },
+              "description": "Keep rows in any of these departments. Repeat the parameter for several.",
+              "default": [],
+              "title": "Department"
+            },
+            "description": "Keep rows in any of these departments. Repeat the parameter for several."
+          },
+          {
+            "name": "segment",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              },
+              "description": "Keep rows in any of these segments.",
+              "default": [],
+              "title": "Segment"
+            },
+            "description": "Keep rows in any of these segments."
+          },
+          {
+            "name": "tier",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              },
+              "description": "Keep rows in any of these value tiers ('Class' on the dashboard).",
+              "default": [],
+              "title": "Tier"
+            },
+            "description": "Keep rows in any of these value tiers ('Class' on the dashboard)."
+          },
+          {
+            "name": "recency_band",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              },
+              "description": "Keep rows in any of these recency bands.",
+              "default": [],
+              "title": "Recency Band"
+            },
+            "description": "Keep rows in any of these recency bands."
+          },
+          {
+            "name": "tenure_band",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              },
+              "description": "Keep rows in any of these tenure bands.",
+              "default": [],
+              "title": "Tenure Band"
+            },
+            "description": "Keep rows in any of these tenure bands."
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CustomerPage"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "A parameter is missing, mistyped or not an allowed value.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/customers.csv": {
+      "get": {
+        "tags": [
+          "Customers"
+        ],
+        "summary": "The filtered customer list as a CSV file",
+        "description": "Same filters and search as /api/customers, most valuable customers first.",
+        "operationId": "download_customers_api_customers_csv_get",
+        "parameters": [
+          {
+            "name": "search",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "maxLength": 60,
+              "description": "Text matched against the customer ID and the MSISDN key.",
+              "default": "",
+              "title": "Search"
+            },
+            "description": "Text matched against the customer ID and the MSISDN key."
+          },
+          {
+            "name": "over_sim_limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "boolean",
+              "description": "false (default): people. true: agent and reseller accounts only, which are left out everywhere else.",
+              "default": false,
+              "title": "Over Sim Limit"
+            },
+            "description": "false (default): people. true: agent and reseller accounts only, which are left out everywhere else."
+          },
+          {
+            "name": "department",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              },
+              "description": "Keep rows in any of these departments. Repeat the parameter for several.",
+              "default": [],
+              "title": "Department"
+            },
+            "description": "Keep rows in any of these departments. Repeat the parameter for several."
+          },
+          {
+            "name": "segment",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              },
+              "description": "Keep rows in any of these segments.",
+              "default": [],
+              "title": "Segment"
+            },
+            "description": "Keep rows in any of these segments."
+          },
+          {
+            "name": "tier",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              },
+              "description": "Keep rows in any of these value tiers ('Class' on the dashboard).",
+              "default": [],
+              "title": "Tier"
+            },
+            "description": "Keep rows in any of these value tiers ('Class' on the dashboard)."
+          },
+          {
+            "name": "recency_band",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              },
+              "description": "Keep rows in any of these recency bands.",
+              "default": [],
+              "title": "Recency Band"
+            },
+            "description": "Keep rows in any of these recency bands."
+          },
+          {
+            "name": "tenure_band",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              },
+              "description": "Keep rows in any of these tenure bands.",
+              "default": [],
+              "title": "Tenure Band"
+            },
+            "description": "Keep rows in any of these tenure bands."
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "A CSV file.",
+            "content": {
+              "text/csv": {}
+            }
+          },
+          "422": {
+            "description": "A parameter is missing, mistyped or not an allowed value.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/customers/{customer_id}": {
+      "get": {
+        "tags": [
+          "Customers"
+        ],
+        "summary": "One customer and each of their SIMs (the drill-down)",
+        "description": "The customer's combined figures, then every scored SIM with its own segment,\nclass, value and probability of being active, and a count of SIMs per segment.",
+        "operationId": "get_customer_api_customers__customer_id__get",
+        "parameters": [
+          {
+            "name": "customer_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "maxLength": 40,
+              "description": "Customer ID, e.g. CE6D2694CC2.",
+              "title": "Customer Id"
+            },
+            "description": "Customer ID, e.g. CE6D2694CC2."
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CustomerDetail"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "A parameter is missing, mistyped or not an allowed value.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Nothing exists with that identifier.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/subscribers": {
+      "get": {
+        "tags": [
+          "SIMs"
+        ],
+        "summary": "One page of the SIM list",
+        "description": "Every scored SIM, one row each, whoever it belongs to. Here the filters test the\nSIM's own segment and class, which may differ from its customer's.",
+        "operationId": "get_subscribers_api_subscribers_get",
+        "parameters": [
+          {
+            "name": "search",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "maxLength": 60,
+              "description": "Text matched against the customer ID and the MSISDN key.",
+              "default": "",
+              "title": "Search"
+            },
+            "description": "Text matched against the customer ID and the MSISDN key."
+          },
+          {
+            "name": "sort",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "$ref": "#/components/schemas/SortColumn",
+              "description": "Column to sort by.",
+              "default": "cltv_12m"
+            },
+            "description": "Column to sort by."
+          },
+          {
+            "name": "descending",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "boolean",
+              "description": "Largest first when true.",
+              "default": true,
+              "title": "Descending"
+            },
+            "description": "Largest first when true."
+          },
+          {
+            "name": "page",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 0,
+              "description": "Page to return; the first page is 0.",
+              "default": 0,
+              "title": "Page"
+            },
+            "description": "Page to return; the first page is 0."
+          },
+          {
+            "name": "page_size",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "maximum": 200,
+              "minimum": 1,
+              "description": "Rows per page.",
+              "default": 20,
+              "title": "Page Size"
+            },
+            "description": "Rows per page."
+          },
+          {
+            "name": "department",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              },
+              "description": "Keep rows in any of these departments. Repeat the parameter for several.",
+              "default": [],
+              "title": "Department"
+            },
+            "description": "Keep rows in any of these departments. Repeat the parameter for several."
+          },
+          {
+            "name": "segment",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              },
+              "description": "Keep rows in any of these segments.",
+              "default": [],
+              "title": "Segment"
+            },
+            "description": "Keep rows in any of these segments."
+          },
+          {
+            "name": "tier",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              },
+              "description": "Keep rows in any of these value tiers ('Class' on the dashboard).",
+              "default": [],
+              "title": "Tier"
+            },
+            "description": "Keep rows in any of these value tiers ('Class' on the dashboard)."
+          },
+          {
+            "name": "recency_band",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              },
+              "description": "Keep rows in any of these recency bands.",
+              "default": [],
+              "title": "Recency Band"
+            },
+            "description": "Keep rows in any of these recency bands."
+          },
+          {
+            "name": "tenure_band",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              },
+              "description": "Keep rows in any of these tenure bands.",
+              "default": [],
+              "title": "Tenure Band"
+            },
+            "description": "Keep rows in any of these tenure bands."
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SubscriberPage"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "A parameter is missing, mistyped or not an allowed value.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/subscribers.csv": {
+      "get": {
+        "tags": [
+          "SIMs"
+        ],
+        "summary": "The filtered SIM list as a CSV file",
+        "description": "Same filters and search as /api/subscribers, most valuable SIMs first.",
+        "operationId": "download_subscribers_api_subscribers_csv_get",
+        "parameters": [
+          {
+            "name": "search",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "maxLength": 60,
+              "description": "Text matched against the customer ID and the MSISDN key.",
+              "default": "",
+              "title": "Search"
+            },
+            "description": "Text matched against the customer ID and the MSISDN key."
+          },
+          {
+            "name": "department",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              },
+              "description": "Keep rows in any of these departments. Repeat the parameter for several.",
+              "default": [],
+              "title": "Department"
+            },
+            "description": "Keep rows in any of these departments. Repeat the parameter for several."
+          },
+          {
+            "name": "segment",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              },
+              "description": "Keep rows in any of these segments.",
+              "default": [],
+              "title": "Segment"
+            },
+            "description": "Keep rows in any of these segments."
+          },
+          {
+            "name": "tier",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              },
+              "description": "Keep rows in any of these value tiers ('Class' on the dashboard).",
+              "default": [],
+              "title": "Tier"
+            },
+            "description": "Keep rows in any of these value tiers ('Class' on the dashboard)."
+          },
+          {
+            "name": "recency_band",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              },
+              "description": "Keep rows in any of these recency bands.",
+              "default": [],
+              "title": "Recency Band"
+            },
+            "description": "Keep rows in any of these recency bands."
+          },
+          {
+            "name": "tenure_band",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              },
+              "description": "Keep rows in any of these tenure bands.",
+              "default": [],
+              "title": "Tenure Band"
+            },
+            "description": "Keep rows in any of these tenure bands."
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "A CSV file.",
+            "content": {
+              "text/csv": {}
+            }
+          },
+          "422": {
+            "description": "A parameter is missing, mistyped or not an allowed value.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "schemas": {
+      "Backtest": {
+        "properties": {
+          "holdout_days": {
+            "type": "integer",
+            "title": "Holdout Days",
+            "description": "Length of the holdout period in days.",
+            "examples": [
+              92
+            ]
+          },
+          "recharge_days_error_pct": {
+            "type": "number",
+            "title": "Recharge Days Error Pct",
+            "description": "Predicted vs actual total recharge-days, in percent.",
+            "examples": [
+              5.9
+            ]
+          },
+          "spend_error_pct": {
+            "type": "number",
+            "title": "Spend Error Pct",
+            "description": "Predicted vs actual total spend, in percent.",
+            "examples": [
+              4.8
+            ]
+          },
+          "mae_recharge_days": {
+            "type": "number",
+            "title": "Mae Recharge Days",
+            "description": "Average absolute miss per SIM, in recharge-days.",
+            "examples": [
+              1.86
+            ]
+          },
+          "buckets": {
+            "items": {
+              "$ref": "#/components/schemas/BacktestBucket"
+            },
+            "type": "array",
+            "title": "Buckets"
+          }
+        },
+        "type": "object",
+        "required": [
+          "holdout_days",
+          "recharge_days_error_pct",
+          "spend_error_pct",
+          "mae_recharge_days",
+          "buckets"
+        ],
+        "title": "Backtest"
+      },
+      "BacktestBucket": {
+        "properties": {
+          "bucket": {
+            "type": "string",
+            "title": "Bucket",
+            "description": "Repeat recharge-days before the holdout period.",
+            "examples": [
+              "6-10"
+            ]
+          },
+          "sims": {
+            "type": "integer",
+            "title": "Sims"
+          },
+          "actual": {
+            "type": "number",
+            "title": "Actual",
+            "description": "Average recharge-days per SIM that really happened in the holdout."
+          },
+          "predicted": {
+            "type": "number",
+            "title": "Predicted",
+            "description": "Average recharge-days per SIM the model predicted."
+          }
+        },
+        "type": "object",
+        "required": [
+          "bucket",
+          "sims",
+          "actual",
+          "predicted"
+        ],
+        "title": "BacktestBucket"
+      },
+      "Customer": {
+        "properties": {
+          "customer_id": {
+            "type": "string",
+            "title": "Customer Id",
+            "description": "Hashed national ID. Starts with C, or S for a SIM that could not be linked to a person.",
+            "examples": [
+              "CE6D2694CC2"
+            ]
+          },
+          "sims_scored": {
+            "type": "integer",
+            "title": "Sims Scored",
+            "description": "Their SIMs that are scored (connected, with a recharge). The number of rows in the drill-down."
+          },
+          "sims_registered": {
+            "type": "integer",
+            "title": "Sims Registered",
+            "description": "SIMs registered to them, scored or not."
+          },
+          "lapsed_sims": {
+            "type": "integer",
+            "title": "Lapsed Sims",
+            "description": "How many of their scored SIMs are, on their own, in a risk segment (silent 61 days or more)."
+          },
+          "over_sim_limit": {
+            "type": "boolean",
+            "title": "Over Sim Limit",
+            "description": "True for an agent or reseller account (more SIMs than run.max_sims)."
+          },
+          "department": {
+            "type": "string",
+            "title": "Department",
+            "description": "Department of their most valuable SIM."
+          },
+          "segment": {
+            "type": "string",
+            "title": "Segment",
+            "description": "From the customer's combined R, F and M. 'Agent or reseller' if over_sim_limit."
+          },
+          "cltv_tier": {
+            "type": "string",
+            "title": "Cltv Tier",
+            "description": "Platinum, Gold, Silver or Bronze by customer value; 'Unranked' if over_sim_limit. Shown as 'Class' on the dashboard."
+          },
+          "r_score": {
+            "type": "integer",
+            "maximum": 5.0,
+            "minimum": 0.0,
+            "title": "R Score",
+            "description": "1-5 from the recency band; 0 if over_sim_limit."
+          },
+          "f_score": {
+            "type": "integer",
+            "maximum": 5.0,
+            "minimum": 0.0,
+            "title": "F Score",
+            "description": "1-5; 0 if over_sim_limit."
+          },
+          "m_score": {
+            "type": "integer",
+            "maximum": 5.0,
+            "minimum": 0.0,
+            "title": "M Score",
+            "description": "1-5; 0 if over_sim_limit."
+          },
+          "days_since_last": {
+            "type": "integer",
+            "title": "Days Since Last",
+            "description": "RECENCY: analysis date minus the last recharge on any of their SIMs."
+          },
+          "recency_band": {
+            "type": "string",
+            "title": "Recency Band"
+          },
+          "recharge_days": {
+            "type": "integer",
+            "title": "Recharge Days",
+            "description": "FREQUENCY: days on which any of their SIMs recharged."
+          },
+          "monetary": {
+            "type": "number",
+            "title": "Monetary",
+            "description": "MONETARY: run.margin x spend across all their SIMs in the history window."
+          },
+          "tenure_months": {
+            "type": "integer",
+            "title": "Tenure Months",
+            "description": "Months since their oldest scored SIM was activated."
+          },
+          "tenure_band": {
+            "type": "string",
+            "title": "Tenure Band"
+          },
+          "p_active": {
+            "type": "number",
+            "maximum": 1.0,
+            "minimum": 0.0,
+            "title": "P Active",
+            "description": "Probability that at least one of their SIMs is still active."
+          },
+          "cltv_12m": {
+            "type": "number",
+            "title": "Cltv 12M",
+            "description": "Predicted 12-month value: the sum of their SIMs."
+          },
+          "value_at_risk": {
+            "type": "number",
+            "title": "Value At Risk",
+            "description": "Sum of their SIMs' value at risk."
+          },
+          "contact_msisdn_key": {
+            "type": "string",
+            "title": "Contact Msisdn Key",
+            "description": "Their most valuable SIM: the number to contact."
+          }
+        },
+        "type": "object",
+        "required": [
+          "customer_id",
+          "sims_scored",
+          "sims_registered",
+          "lapsed_sims",
+          "over_sim_limit",
+          "department",
+          "segment",
+          "cltv_tier",
+          "r_score",
+          "f_score",
+          "m_score",
+          "days_since_last",
+          "recency_band",
+          "recharge_days",
+          "monetary",
+          "tenure_months",
+          "tenure_band",
+          "p_active",
+          "cltv_12m",
+          "value_at_risk",
+          "contact_msisdn_key"
+        ],
+        "title": "Customer",
+        "description": "One customer: their scored SIMs taken together."
+      },
+      "CustomerDetail": {
+        "properties": {
+          "customer": {
+            "$ref": "#/components/schemas/Customer"
+          },
+          "sims": {
+            "items": {
+              "$ref": "#/components/schemas/Subscriber"
+            },
+            "type": "array",
+            "title": "Sims",
+            "description": "The customer's scored SIMs, most valuable first."
+          },
+          "sims_by_segment": {
+            "additionalProperties": {
+              "type": "integer"
+            },
+            "type": "object",
+            "title": "Sims By Segment",
+            "description": "How many of those SIMs are in each SIM segment, e.g. {'Champions': 1, 'Churned': 1}."
+          }
+        },
+        "type": "object",
+        "required": [
+          "customer",
+          "sims",
+          "sims_by_segment"
+        ],
+        "title": "CustomerDetail",
+        "description": "The drill-down: one customer, then each of their SIMs with its own segment and value."
+      },
+      "CustomerPage": {
+        "properties": {
+          "total": {
+            "type": "integer",
+            "title": "Total",
+            "description": "Customers matching the filters and search."
+          },
+          "sims": {
+            "type": "integer",
+            "title": "Sims",
+            "description": "Scored SIMs held by them."
+          },
+          "page": {
+            "type": "integer",
+            "title": "Page",
+            "description": "Page returned; the first page is 0."
+          },
+          "page_size": {
+            "type": "integer",
+            "title": "Page Size"
+          },
+          "pages": {
+            "type": "integer",
+            "title": "Pages",
+            "description": "Number of pages available (at least 1)."
+          },
+          "highest_value": {
+            "type": "number",
+            "title": "Highest Value",
+            "description": "Largest 12-month value among ALL matching customers (not just this page); use it to scale the value bar in each row. 0 if nothing matches."
+          },
+          "rows": {
+            "items": {
+              "$ref": "#/components/schemas/Customer"
+            },
+            "type": "array",
+            "title": "Rows"
+          }
+        },
+        "type": "object",
+        "required": [
+          "total",
+          "sims",
+          "page",
+          "page_size",
+          "pages",
+          "highest_value",
+          "rows"
+        ],
+        "title": "CustomerPage"
+      },
+      "CustomerSort": {
+        "type": "string",
+        "enum": [
+          "customer_id",
+          "sims_scored",
+          "sims_registered",
+          "lapsed_sims",
+          "over_sim_limit",
+          "department",
+          "segment",
+          "cltv_tier",
+          "r_score",
+          "f_score",
+          "m_score",
+          "days_since_last",
+          "recency_band",
+          "recharge_days",
+          "monetary",
+          "tenure_months",
+          "tenure_band",
+          "p_active",
+          "cltv_12m",
+          "value_at_risk",
+          "contact_msisdn_key"
+        ],
+        "title": "CustomerSort"
+      },
+      "Decile": {
+        "properties": {
+          "decile": {
+            "type": "integer",
+            "maximum": 10.0,
+            "minimum": 1.0,
+            "title": "Decile",
+            "description": "1 = the most valuable tenth of the matching customers."
+          },
+          "total_value": {
+            "type": "number",
+            "title": "Total Value"
+          },
+          "value_share": {
+            "type": "number",
+            "title": "Value Share",
+            "description": "This decile's share of the total value."
+          }
+        },
+        "type": "object",
+        "required": [
+          "decile",
+          "total_value",
+          "value_share"
+        ],
+        "title": "Decile"
+      },
+      "Error": {
+        "properties": {
+          "detail": {
+            "type": "string",
+            "title": "Detail",
+            "description": "What went wrong, in plain words."
+          }
+        },
+        "type": "object",
+        "required": [
+          "detail"
+        ],
+        "title": "Error"
+      },
+      "GroupStats": {
+        "properties": {
+          "name": {
+            "type": "string",
+            "title": "Name"
+          },
+          "customers": {
+            "type": "integer",
+            "title": "Customers"
+          },
+          "customers_share": {
+            "type": "number",
+            "title": "Customers Share",
+            "description": "Share of the customers in this breakdown."
+          },
+          "sims": {
+            "type": "integer",
+            "title": "Sims",
+            "description": "Scored SIMs held by these customers."
+          },
+          "total_value": {
+            "type": "number",
+            "title": "Total Value"
+          },
+          "value_share": {
+            "type": "number",
+            "title": "Value Share",
+            "description": "Share of the value in this breakdown."
+          },
+          "average_value": {
+            "type": "number",
+            "title": "Average Value",
+            "description": "Average predicted 12-month value per customer."
+          },
+          "average_p_active": {
+            "type": "number",
+            "title": "Average P Active",
+            "description": "Average probability that a customer in the group is still active."
+          },
+          "value_at_risk": {
+            "type": "number",
+            "title": "Value At Risk"
+          },
+          "value_at_risk_share": {
+            "type": "number",
+            "title": "Value At Risk Share",
+            "description": "Share of the value at risk in this breakdown."
+          }
+        },
+        "type": "object",
+        "required": [
+          "name",
+          "customers",
+          "customers_share",
+          "sims",
+          "total_value",
+          "value_share",
+          "average_value",
+          "average_p_active",
+          "value_at_risk",
+          "value_at_risk_share"
+        ],
+        "title": "GroupStats",
+        "description": "Figures for one group of customers: a segment, a department, or a band."
+      },
+      "Health": {
+        "properties": {
+          "status": {
+            "type": "string",
+            "title": "Status",
+            "description": "Always 'ok' when the API can reach the database.",
+            "examples": [
+              "ok"
+            ]
+          },
+          "database": {
+            "type": "string",
+            "title": "Database",
+            "description": "Kind of database in use.",
+            "examples": [
+              "postgresql"
+            ]
+          },
+          "customers_scored": {
+            "type": "integer",
+            "title": "Customers Scored",
+            "description": "Rows in cltv_customer_scores.",
+            "examples": [
+              5221
+            ]
+          },
+          "sims_scored": {
+            "type": "integer",
+            "title": "Sims Scored",
+            "description": "Rows in cltv_line_scores.",
+            "examples": [
+              6131
+            ]
+          },
+          "scored_as_of": {
+            "type": "string",
+            "title": "Scored As Of",
+            "description": "The analysis date of the current scores.",
+            "examples": [
+              "2026-11-15"
+            ]
+          },
+          "built": {
+            "type": "string",
+            "title": "Built",
+            "description": "Day the pipeline last loaded the tables.",
+            "examples": [
+              "2026-11-15"
+            ]
+          }
+        },
+        "type": "object",
+        "required": [
+          "status",
+          "database",
+          "customers_scored",
+          "sims_scored",
+          "scored_as_of",
+          "built"
+        ],
+        "title": "Health"
+      },
+      "Kpis": {
+        "properties": {
+          "customers": {
+            "type": "integer",
+            "title": "Customers",
+            "description": "Customers matching the filters."
+          },
+          "all_customers": {
+            "type": "integer",
+            "title": "All Customers",
+            "description": "Customers in total, ignoring the filters."
+          },
+          "sims": {
+            "type": "integer",
+            "title": "Sims",
+            "description": "Scored SIMs held by the matching customers."
+          },
+          "multi_sim_customers": {
+            "type": "integer",
+            "title": "Multi Sim Customers",
+            "description": "Matching customers with more than one SIM registered."
+          },
+          "customers_with_lapsed_sim": {
+            "type": "integer",
+            "title": "Customers With Lapsed Sim",
+            "description": "Matching customers in a healthy segment who nevertheless have at least one SIM that has gone quiet. They moved their usage; they did not leave."
+          },
+          "total_value": {
+            "type": "number",
+            "title": "Total Value",
+            "description": "Sum of predicted 12-month value."
+          },
+          "average_value": {
+            "type": "number",
+            "title": "Average Value",
+            "description": "total_value / customers (0 if there are none)."
+          },
+          "total_monetary": {
+            "type": "number",
+            "title": "Total Monetary",
+            "description": "Sum of monetary: margin x spend in the history window."
+          },
+          "value_at_risk": {
+            "type": "number",
+            "title": "Value At Risk",
+            "description": "Value expected to be lost because SIMs may have lapsed."
+          },
+          "likely_active_customers": {
+            "type": "integer",
+            "title": "Likely Active Customers",
+            "description": "Customers whose probability of being active is at or above the threshold."
+          },
+          "likely_active_share": {
+            "type": "number",
+            "title": "Likely Active Share",
+            "description": "likely_active_customers / customers."
+          },
+          "accounts_over_sim_limit": {
+            "type": "integer",
+            "title": "Accounts Over Sim Limit",
+            "description": "Agent or reseller accounts, which are left out of every figure here. Ignores the filters."
+          }
+        },
+        "type": "object",
+        "required": [
+          "customers",
+          "all_customers",
+          "sims",
+          "multi_sim_customers",
+          "customers_with_lapsed_sim",
+          "total_value",
+          "average_value",
+          "total_monetary",
+          "value_at_risk",
+          "likely_active_customers",
+          "likely_active_share",
+          "accounts_over_sim_limit"
+        ],
+        "title": "Kpis"
+      },
+      "Lists": {
+        "properties": {
+          "departments": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Departments"
+          },
+          "segments": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Segments"
+          },
+          "tiers": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Tiers",
+            "description": "Value tiers, best first. Shown as 'Class' on the dashboard."
+          },
+          "recency_bands": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Recency Bands"
+          },
+          "tenure_bands": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Tenure Bands"
+          }
+        },
+        "type": "object",
+        "required": [
+          "departments",
+          "segments",
+          "tiers",
+          "recency_bands",
+          "tenure_bands"
+        ],
+        "title": "Lists",
+        "description": "The allowed values for each filter, in display order."
+      },
+      "Meta": {
+        "properties": {
+          "run": {
+            "$ref": "#/components/schemas/RunInfo"
+          },
+          "model": {
+            "additionalProperties": {
+              "type": "number"
+            },
+            "type": "object",
+            "title": "Model",
+            "description": "Fitted model parameters (BG/NBD and Gamma-Gamma)."
+          },
+          "quality": {
+            "additionalProperties": {
+              "type": "integer"
+            },
+            "type": "object",
+            "title": "Quality",
+            "description": "What the data cleaning read and removed."
+          },
+          "backtest": {
+            "$ref": "#/components/schemas/Backtest"
+          },
+          "lists": {
+            "$ref": "#/components/schemas/Lists"
+          },
+          "transition_dates": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Transition Dates",
+            "description": "Snapshot dates available for /api/transitions, oldest first. The last one is the analysis date."
+          }
+        },
+        "type": "object",
+        "required": [
+          "run",
+          "model",
+          "quality",
+          "backtest",
+          "lists",
+          "transition_dates"
+        ],
+        "title": "Meta"
+      },
+      "Overview": {
+        "properties": {
+          "kpis": {
+            "$ref": "#/components/schemas/Kpis"
+          },
+          "deciles": {
+            "items": {
+              "$ref": "#/components/schemas/Decile"
+            },
+            "type": "array",
+            "title": "Deciles",
+            "description": "Up to ten rows; fewer only if fewer than ten customers match."
+          },
+          "by_segment": {
+            "items": {
+              "$ref": "#/components/schemas/GroupStats"
+            },
+            "type": "array",
+            "title": "By Segment",
+            "description": "Every segment, in display order. Ignores the segment filter."
+          },
+          "by_department": {
+            "items": {
+              "$ref": "#/components/schemas/GroupStats"
+            },
+            "type": "array",
+            "title": "By Department",
+            "description": "Departments with customers, highest average value first. Ignores the department filter."
+          },
+          "by_recency": {
+            "items": {
+              "$ref": "#/components/schemas/GroupStats"
+            },
+            "type": "array",
+            "title": "By Recency",
+            "description": "Every recency band, in order."
+          },
+          "by_tenure": {
+            "items": {
+              "$ref": "#/components/schemas/GroupStats"
+            },
+            "type": "array",
+            "title": "By Tenure",
+            "description": "Every tenure band, in order."
+          }
+        },
+        "type": "object",
+        "required": [
+          "kpis",
+          "deciles",
+          "by_segment",
+          "by_department",
+          "by_recency",
+          "by_tenure"
+        ],
+        "title": "Overview"
+      },
+      "RunInfo": {
+        "properties": {
+          "analysis_date": {
+            "type": "string",
+            "title": "Analysis Date",
+            "description": "The day the analysis was done. Recency is counted back from it.",
+            "examples": [
+              "2026-11-15"
+            ]
+          },
+          "obs_start": {
+            "type": "string",
+            "title": "Obs Start",
+            "description": "First day of recharge history used.",
+            "examples": [
+              "2025-11-16"
+            ]
+          },
+          "obs_end": {
+            "type": "string",
+            "title": "Obs End",
+            "description": "Last day of recharge history used. Same as analysis_date.",
+            "examples": [
+              "2026-11-15"
+            ]
+          },
+          "calib_end": {
+            "type": "string",
+            "title": "Calib End",
+            "description": "The model is back-tested on the days after this date.",
+            "examples": [
+              "2026-08-15"
+            ]
+          },
+          "built": {
+            "type": "string",
+            "title": "Built",
+            "description": "Day the tables were loaded.",
+            "examples": [
+              "2026-11-15"
+            ]
+          },
+          "is_synthetic": {
+            "type": "integer",
+            "title": "Is Synthetic",
+            "description": "1 if the data is synthetic (show a warning), 0 if real.",
+            "examples": [
+              1
+            ]
+          },
+          "currency": {
+            "type": "string",
+            "title": "Currency",
+            "examples": [
+              "XOF"
+            ]
+          },
+          "margin": {
+            "type": "number",
+            "title": "Margin",
+            "description": "Share of recharge spend counted as value: monetary = margin x spend, and 12-month value is margin x predicted spend.",
+            "examples": [
+              0.8
+            ]
+          },
+          "discount_rate": {
+            "type": "number",
+            "title": "Discount Rate",
+            "description": "Annual discount rate applied to future value.",
+            "examples": [
+              0.1
+            ]
+          },
+          "alive_threshold": {
+            "type": "number",
+            "title": "Alive Threshold",
+            "description": "A customer or SIM is 'likely active' at or above this probability.",
+            "examples": [
+              0.5
+            ]
+          },
+          "max_sims": {
+            "type": "integer",
+            "title": "Max Sims",
+            "description": "An account with more SIMs than this is treated as an agent or reseller.",
+            "examples": [
+              5
+            ]
+          }
+        },
+        "type": "object",
+        "required": [
+          "analysis_date",
+          "obs_start",
+          "obs_end",
+          "calib_end",
+          "built",
+          "is_synthetic",
+          "currency",
+          "margin",
+          "discount_rate",
+          "alive_threshold",
+          "max_sims"
+        ],
+        "title": "RunInfo"
+      },
+      "SortColumn": {
+        "type": "string",
+        "enum": [
+          "customer_id",
+          "msisdn_key",
+          "customer_sims",
+          "department",
+          "segment",
+          "cltv_tier",
+          "r_score",
+          "f_score",
+          "m_score",
+          "days_since_last",
+          "recency_band",
+          "recharge_days",
+          "monetary",
+          "tenure_months",
+          "t_days_observed",
+          "exp_avg_value",
+          "p_alive",
+          "exp_recharge_days_90d",
+          "cltv_12m",
+          "value_at_risk"
+        ],
+        "title": "SortColumn"
+      },
+      "Subscriber": {
+        "properties": {
+          "customer_id": {
+            "type": "string",
+            "title": "Customer Id",
+            "description": "The customer this SIM belongs to.",
+            "examples": [
+              "CE6D2694CC2"
+            ]
+          },
+          "msisdn_key": {
+            "type": "string",
+            "title": "Msisdn Key",
+            "description": "Surrogate MSISDN key, as text.",
+            "examples": [
+              "800996079508"
+            ]
+          },
+          "customer_sims": {
+            "type": "integer",
+            "title": "Customer Sims",
+            "description": "SIMs registered to that customer."
+          },
+          "department": {
+            "type": "string",
+            "title": "Department"
+          },
+          "segment": {
+            "type": "string",
+            "title": "Segment",
+            "description": "From this SIM's own R, F and M. May differ from the customer's segment."
+          },
+          "cltv_tier": {
+            "type": "string",
+            "title": "Cltv Tier",
+            "description": "Platinum, Gold, Silver or Bronze among SIMs."
+          },
+          "r_score": {
+            "type": "integer",
+            "maximum": 5.0,
+            "minimum": 1.0,
+            "title": "R Score"
+          },
+          "f_score": {
+            "type": "integer",
+            "maximum": 5.0,
+            "minimum": 1.0,
+            "title": "F Score"
+          },
+          "m_score": {
+            "type": "integer",
+            "maximum": 5.0,
+            "minimum": 1.0,
+            "title": "M Score"
+          },
+          "days_since_last": {
+            "type": "integer",
+            "title": "Days Since Last",
+            "description": "RECENCY: analysis date minus this SIM's last recharge."
+          },
+          "recency_band": {
+            "type": "string",
+            "title": "Recency Band"
+          },
+          "recharge_days": {
+            "type": "integer",
+            "title": "Recharge Days",
+            "description": "FREQUENCY: days with at least one recharge in the window."
+          },
+          "monetary": {
+            "type": "number",
+            "title": "Monetary",
+            "description": "MONETARY: run.margin x this SIM's spend in the history window."
+          },
+          "tenure_months": {
+            "type": "integer",
+            "title": "Tenure Months",
+            "description": "Months since the line was activated."
+          },
+          "t_days_observed": {
+            "type": "integer",
+            "title": "T Days Observed",
+            "description": "Days since the first recharge seen in the window (the model's clock)."
+          },
+          "exp_avg_value": {
+            "type": "number",
+            "title": "Exp Avg Value",
+            "description": "Expected spend per future recharge-day."
+          },
+          "p_alive": {
+            "type": "number",
+            "maximum": 1.0,
+            "minimum": 0.0,
+            "title": "P Alive",
+            "description": "Probability the SIM is still active."
+          },
+          "exp_recharge_days_90d": {
+            "type": "number",
+            "title": "Exp Recharge Days 90D",
+            "description": "Expected recharge-days in the next 90 days."
+          },
+          "cltv_12m": {
+            "type": "number",
+            "title": "Cltv 12M",
+            "description": "Predicted 12-month value."
+          },
+          "value_at_risk": {
+            "type": "number",
+            "title": "Value At Risk"
+          }
+        },
+        "type": "object",
+        "required": [
+          "customer_id",
+          "msisdn_key",
+          "customer_sims",
+          "department",
+          "segment",
+          "cltv_tier",
+          "r_score",
+          "f_score",
+          "m_score",
+          "days_since_last",
+          "recency_band",
+          "recharge_days",
+          "monetary",
+          "tenure_months",
+          "t_days_observed",
+          "exp_avg_value",
+          "p_alive",
+          "exp_recharge_days_90d",
+          "cltv_12m",
+          "value_at_risk"
+        ],
+        "title": "Subscriber",
+        "description": "One scored SIM."
+      },
+      "SubscriberPage": {
+        "properties": {
+          "total": {
+            "type": "integer",
+            "title": "Total",
+            "description": "SIMs matching the filters and search."
+          },
+          "customers": {
+            "type": "integer",
+            "title": "Customers",
+            "description": "Distinct customers among them."
+          },
+          "page": {
+            "type": "integer",
+            "title": "Page",
+            "description": "Page returned; the first page is 0."
+          },
+          "page_size": {
+            "type": "integer",
+            "title": "Page Size"
+          },
+          "pages": {
+            "type": "integer",
+            "title": "Pages",
+            "description": "Number of pages available (at least 1)."
+          },
+          "highest_value": {
+            "type": "number",
+            "title": "Highest Value",
+            "description": "Largest 12-month value among ALL matching SIMs (not just this page). 0 if nothing matches."
+          },
+          "rows": {
+            "items": {
+              "$ref": "#/components/schemas/Subscriber"
+            },
+            "type": "array",
+            "title": "Rows"
+          }
+        },
+        "type": "object",
+        "required": [
+          "total",
+          "customers",
+          "page",
+          "page_size",
+          "pages",
+          "highest_value",
+          "rows"
+        ],
+        "title": "SubscriberPage"
+      },
+      "TransitionSummary": {
+        "properties": {
+          "segmented_at_baseline": {
+            "type": "integer",
+            "title": "Segmented At Baseline",
+            "description": "Customers that had a segment on the baseline date."
+          },
+          "stayed": {
+            "type": "integer",
+            "title": "Stayed",
+            "description": "Of those, customers in the same segment on the comparison date."
+          },
+          "stayed_share": {
+            "type": "number",
+            "title": "Stayed Share"
+          },
+          "top_segment": {
+            "type": "string",
+            "title": "Top Segment",
+            "description": "The best segment (first in the list).",
+            "examples": [
+              "Champions"
+            ]
+          },
+          "top_segment_at_baseline": {
+            "type": "integer",
+            "title": "Top Segment At Baseline"
+          },
+          "top_segment_kept": {
+            "type": "integer",
+            "title": "Top Segment Kept",
+            "description": "Customers in the top segment on both dates."
+          },
+          "top_segment_kept_share": {
+            "type": "number",
+            "title": "Top Segment Kept Share"
+          },
+          "slipped_into_risk": {
+            "type": "integer",
+            "title": "Slipped Into Risk",
+            "description": "Customers that moved from a healthy segment to a risk segment or were disconnected."
+          },
+          "disconnected": {
+            "type": "integer",
+            "title": "Disconnected",
+            "description": "Segmented customers with no connected SIM left by the comparison date."
+          },
+          "new_since_baseline": {
+            "type": "integer",
+            "title": "New Since Baseline",
+            "description": "Customers whose first recharge came after the baseline date."
+          }
+        },
+        "type": "object",
+        "required": [
+          "segmented_at_baseline",
+          "stayed",
+          "stayed_share",
+          "top_segment",
+          "top_segment_at_baseline",
+          "top_segment_kept",
+          "top_segment_kept_share",
+          "slipped_into_risk",
+          "disconnected",
+          "new_since_baseline"
+        ],
+        "title": "TransitionSummary"
+      },
+      "Transitions": {
+        "properties": {
+          "baseline": {
+            "type": "string",
+            "title": "Baseline",
+            "examples": [
+              "2026-08-31"
+            ]
+          },
+          "comparison": {
+            "type": "string",
+            "title": "Comparison",
+            "examples": [
+              "2026-11-15"
+            ]
+          },
+          "rows": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Rows",
+            "description": "Segment on the baseline date (matrix rows). The last row is customers that were new."
+          },
+          "cols": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Cols",
+            "description": "Segment on the comparison date (matrix columns). The last column is disconnected customers."
+          },
+          "matrix": {
+            "items": {
+              "items": {
+                "type": "integer"
+              },
+              "type": "array"
+            },
+            "type": "array",
+            "title": "Matrix",
+            "description": "matrix[r][c] = customers that were in rows[r] and are now in cols[c]."
+          },
+          "row_totals": {
+            "items": {
+              "type": "integer"
+            },
+            "type": "array",
+            "title": "Row Totals",
+            "description": "Sum of each matrix row."
+          },
+          "row_shares": {
+            "items": {
+              "items": {
+                "type": "number"
+              },
+              "type": "array"
+            },
+            "type": "array",
+            "title": "Row Shares",
+            "description": "matrix[r][c] / row_totals[r]: each cell as a share of its row."
+          },
+          "summary": {
+            "$ref": "#/components/schemas/TransitionSummary"
+          }
+        },
+        "type": "object",
+        "required": [
+          "baseline",
+          "comparison",
+          "rows",
+          "cols",
+          "matrix",
+          "row_totals",
+          "row_shares",
+          "summary"
+        ],
+        "title": "Transitions"
+      }
+    }
+  },
+  "tags": [
+    {
+      "name": "System",
+      "description": "Health check and the fixed facts about the current run."
+    },
+    {
+      "name": "Overview",
+      "description": "The figures behind the Overview page, counted in customers."
+    },
+    {
+      "name": "Transitions",
+      "description": "Movement of customers between segments from one snapshot date to another."
+    },
+    {
+      "name": "Customers",
+      "description": "The customer list, its CSV download, and the drill-down into one customer's SIMs."
+    },
+    {
+      "name": "SIMs",
+      "description": "Every scored SIM, one row each, and its CSV download."
+    }
+  ]
+}

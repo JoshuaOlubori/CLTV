@@ -1,0 +1,3 @@
+fastapi
+uvicorn
+psycopg[binary]  # PostgreSQL only; not needed for the local SQLite file
