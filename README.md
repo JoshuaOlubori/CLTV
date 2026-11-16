@@ -948,16 +948,7 @@ Remember that the two `backtest.*_error_pct` figures are already percentages.
 
 ## 8. What changed in version 2
 
-Three things changed in the figures, and the API now presents customers.
-
-**The figures**
-
-| | Version 1 | Version 2 |
-|---|---|---|
-| Recency | Counted back from a fixed date in the settings | Counted back from the analysis date: the day the pipeline ran |
-| Monetary | Not returned | `monetary` = 0.8 × spend, on every customer and SIM |
-| 12-month value | Gross recharge revenue | 0.8 × predicted spend, so every amount is 20 % lower |
-| Dates | Fixed (`2026-10-31` and month ends from April) | Follow the analysis date; read them from `/api/meta` |
+The API now presents customers, instead of sims
 
 **The addresses**
 
@@ -965,25 +956,10 @@ Three things changed in the figures, and the API now presents customers.
 |---|---|
 | `/api/overview` | Now counts customers. Field names changed (table below). |
 | `/api/transitions` | Same shape; the counts are now customers. |
-| `/api/customers` | **New.** The main list. |
-| `/api/customers.csv` | **New.** |
 | `/api/customers/{customer_id}` | The drill-down. `customer` has many more fields; `sims_by_segment` is new. |
 | `/api/subscribers`, `/api/subscribers.csv` | Still the SIM list. Rows gained `monetary`. The CSV file is now named `cltv_sim_list.csv`. |
 | `/api/health` | Gained `customers_scored`. |
 | `/api/meta` | `run` gained `analysis_date`; `run.margin` is now `0.8`. |
-
-**Renamed fields**
-
-| Where | Version 1 | Version 2 |
-|---|---|---|
-| `overview.kpis` | `sims` (the count of rows) | `customers`; `sims` is now the SIMs those customers hold |
-| `overview.kpis` | `all_sims` | `all_customers` |
-| `overview.kpis` | `likely_active_sims` | `likely_active_customers` |
-| `overview.kpis` | — | new: `customers_with_lapsed_sim`, `total_monetary`, `accounts_over_sim_limit` |
-| `overview.by_*[]` | `sims` (the count of rows), `sims_share` | `customers`, `customers_share`; `sims` is now the SIMs they hold |
-| `overview.by_*[]` | `average_p_alive` | `average_p_active` |
-| customer detail | `p_any_line_active` | `p_active` |
-| customer detail | `lead_segment` | removed; use `segment` (the customer's own) |
 
 **For the design**
 
