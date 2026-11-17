@@ -1,0 +1,56 @@
+@import "tailwindcss";
+@import "./styles/design.css";
+
+/* shadcn/ui token bridge: the design palette above is the single source of
+   truth; these variables let stock shadcn primitives blend into it. */
+:root {
+  --background: var(--page);
+  --foreground: var(--ink);
+  --card: var(--white);
+  --card-foreground: var(--ink);
+  --popover: var(--white);
+  --popover-foreground: var(--ink);
+  --primary: var(--ink);
+  --primary-foreground: var(--white);
+  --secondary: var(--page);
+  --secondary-foreground: var(--ink);
+  --muted-ui: var(--page);
+  --muted-foreground: var(--muted);
+  --accent: var(--yellow-pale);
+  --accent-foreground: var(--ink);
+  --destructive: var(--bad);
+  --border: var(--line);
+  --input: var(--line);
+  --ring: var(--amber);
+  --radius-ui: 26px;
+}
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted-ui);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+  --color-yellow: var(--yellow);
+  --color-amber: var(--amber);
+  --color-ink: var(--ink);
+  --color-page: var(--page);
+  --radius-sm: calc(var(--radius-ui) - 10px);
+  --radius-md: calc(var(--radius-ui) - 6px);
+  --radius-lg: var(--radius-ui);
+  --font-display: var(--display);
+  --font-body: var(--body);
+}
